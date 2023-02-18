@@ -2,27 +2,39 @@ package com.mohamedbenrejeb.notesapp
 
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
+import androidx.room.Room
+import com.mohamedbenrejeb.notesapp.database.Note
+import com.mohamedbenrejeb.notesapp.database.NoteDatabase
+import kotlinx.coroutines.*
+import java.util.UUID
 
 @Composable
 fun HomeScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val db = remember {
+        Room.databaseBuilder(
+            context,
+            NoteDatabase::class.java,
+            "note_database"
+        ).build()
+    }
 
     val title = remember {
         mutableStateOf("")
@@ -36,6 +48,11 @@ fun HomeScreen() {
     }
 
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(key1 = Unit) {
+        val newNotes = db.noteDao().getAllNotes()
+        notes.value = newNotes
+    }
 
     Box(
         modifier = Modifier
@@ -85,6 +102,7 @@ fun HomeScreen() {
 
             Button(
                 onClick = {
+                    // Check note title and description
                     val errorMessage =
                         if (title.value.isBlank())
                             "Title can't be blank"
@@ -108,16 +126,18 @@ fun HomeScreen() {
                     }
 
                     val note = Note(
+                        id = UUID.randomUUID().toString(),
                         title = title.value,
                         description = description.value
                     )
 
-                    // Create mutable copy of List
-                    val mutableNotes = notes.value.toMutableList()
-                    // Add note to the new mutable list
-                    mutableNotes.add(note)
-                    // Update notes list state with the new mutable list
-                    notes.value = mutableNotes
+                    scope.launch {
+                        // Add note to database
+                        db.noteDao().addNote(note)
+                        // Get all notes from database
+                        notes.value = db.noteDao().getAllNotes()
+                    }
+
                     title.value = ""
                     description.value = ""
                 }
@@ -146,26 +166,46 @@ fun HomeScreen() {
                 )
             }
 
+            // Notes Column
             notes.value.forEach { note ->
                 Card(
-                    backgroundColor = Color.Red
+                    backgroundColor = Color.DarkGray
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(all = 10.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = note.title,
-                            style = MaterialTheme.typography.h6,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = note.description,
-                            style = MaterialTheme.typography.body1,
-                            color = Color.White
-                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(all = 10.dp)
+                        ) {
+                            Text(
+                                text = note.title,
+                                style = MaterialTheme.typography.h6,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = note.description,
+                                style = MaterialTheme.typography.body1,
+                                color = Color.White
+                            )
+                        }
+
+                        IconButton(onClick = {
+                            scope.launch {
+                                // Delete note from database
+                                db.noteDao().deleteNote(note)
+                                // Update notes state with the latest notes from database
+                                notes.value = db.noteDao().getAllNotes()
+                            }
+                        }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "delete note",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
 
